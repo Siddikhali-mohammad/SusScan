@@ -1,0 +1,66 @@
+# Model checkpoints
+checkpoints/
+*.pt
+*.pth
+*.pkl
+*.ckpt
+
+# Datasets and CSVs
+data/
+*.csv
+*.parquet
+*.db
+
+# Large sweep / experiment outputs
+outputs/
+*.log
+*.jsonl
+dataset/
+
+# Results (generated artifacts — keep committed PNGs intentionally)
+# results/  <-- not ignored; confusion_matrix_140k.png is committed
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+.pytest_cache/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Environment / secrets
+.env
+.env.local
+.env.*.local
+
+# Compressed archives (dataset downloads)
+*.zip
+*.tar.gz
+*.tar.bz2
+*.7z
+
+# Temp files
+tmp/
+*.tmp
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db

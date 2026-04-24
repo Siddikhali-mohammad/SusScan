@@ -1,0 +1,104 @@
+# default.yaml — hyperparameters and paths for all scripts
+# Edit paths.csv_path and paths.checkpoint_dir before running anything.
+
+paths:
+  dataset_root: "data"
+  csv_path: "data/master_v4.csv"
+  checkpoint_dir: "checkpoints"
+  loo_root: "data/loo_sweep_v2"
+  loo_ckpt_dir: "data/loo_sweep_v2/checkpoints"
+  loo_log_dir: "data/loo_sweep_v2/logs"
+  loo_results_dir: "data/loo_sweep_v2/results"
+  loo_state_file: "data/loo_sweep_v2/sweep_state.json"
+  outputs_dir: "outputs"
+
+# checkpoint filenames — must match what's actually in checkpoints/
+checkpoints:
+  efb4: "best_efb4.pt"
+  swin: "best_swin.pt"
+  clip: "best_clip.pt"
+  ensemble_meta: "ensemble_meta.pkl"
+
+seed: 42
+
+data:
+  image_size: 224
+  batch_size: 96
+  num_workers: 12
+  val_frac: 0.20
+  all_datasets:
+    - deepfake_and_real_clean_v1
+    - 140k_clean_v1
+    - artifact_clean_v2
+    - ffpp_c23
+    - celeb_df_v2
+    - sd_generated
+    - adversarial
+    - real_and_fake_face_clean_v1
+  # these only contain fake images — use detection rate instead of AUROC
+  single_class_datasets:
+    - sd_generated
+    - adversarial
+
+normalization:
+  imagenet:
+    mean: [0.485, 0.456, 0.406]
+    std:  [0.229, 0.224, 0.225]
+  clip:
+    mean: [0.48145466, 0.4578275, 0.40821073]
+    std:  [0.26862954, 0.26130258, 0.27577711]
+
+training:
+  label_smoothing: 0.05
+  grad_clip_norm: 1.0
+  weight_decay: 0.01
+  amp_dtype: "bfloat16"
+  tta_views: 4
+
+efb4:
+  total_epochs: 18
+  swa_window: 5
+  backbone_lr: 1.0e-5
+  head_lr: 1.0e-3
+  warmup_epochs: 1
+  drop_rate: 0.3
+  drop_path_rate: 0.2
+  use_compile: true
+  use_channels_last: true
+
+swin:
+  total_epochs: 10
+  swa_window: 3
+  backbone_lr: 2.0e-5
+  head_lr: 1.0e-3
+  warmup_epochs: 1
+  drop_rate: 0.1
+  drop_path_rate: 0.2
+  use_compile: false
+
+clip:
+  total_epochs: 10
+  swa_window: 3
+  backbone_lr: 1.0e-5
+  head_lr: 5.0e-4
+  warmup_epochs: 1
+  dropout: 0.2
+  use_compile: false
+
+# meta-learner weights from final run: CLIP 2.34, Swin 1.33, EFB4 0.39
+meta_learner:
+  C: 1.0
+  max_iter: 1000
+  class_weight: "balanced"
+  solver: "lbfgs"
+
+# sweep order: roughly easiest to hardest so early folds finish fast
+loo_sweep_order:
+  - celeb_df_v2
+  - ffpp_c23
+  - 140k_clean_v1
+  - artifact_clean_v2
+  - deepfake_and_real_clean_v1
+  - real_and_fake_face_clean_v1
+  - sd_generated
+  - adversarial

@@ -1,0 +1,1170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SusScan — Deepfake Detection</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:         #08090e;
+      --surface:    #0e1018;
+      --surface2:   #13151f;
+      --border:     #1c1f2e;
+      --border2:    #252840;
+      --accent:     #4f8eff;
+      --accent-dim: #2a4a8a;
+      --fake:            #ff4d4d;
+      --fake-dim:        #7a1a1a;
+      --fake-glow:       rgba(255,77,77,0.15);
+      --real:            #2ecc71;
+      --real-dim:        #1a5c35;
+      --real-glow:       rgba(46,204,113,0.15);
+      --uncertain:       #f5a623;
+      --uncertain-glow:  rgba(245,166,35,0.15);
+      --text:       #dde1ee;
+      --text-dim:   #7880a0;
+      --text-muted: #444860;
+      --radius:     12px;
+      --radius-sm:  8px;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+
+    /* ── NAV ── */
+    nav {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 40px; height: 60px;
+      background: rgba(8,9,14,0.85);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+    }
+    .nav-logo {
+      font-size: 1.1rem; font-weight: 700; letter-spacing: 0.5px;
+      color: var(--text);
+    }
+    .nav-logo span { color: var(--accent); }
+    .nav-links { display: flex; gap: 28px; }
+    .nav-links a {
+      color: var(--text-dim); font-size: 0.875rem; font-weight: 500;
+      text-decoration: none; transition: color 0.2s;
+    }
+    .nav-links a:hover { color: var(--text); }
+    .nav-cta {
+      background: var(--accent); color: #fff !important;
+      padding: 7px 18px; border-radius: 6px;
+      font-size: 0.8rem !important; font-weight: 600 !important;
+    }
+    .nav-cta:hover { background: #6fa0ff !important; color: #fff !important; }
+
+    /* ── HERO ── */
+    #hero {
+      min-height: 100vh;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      text-align: center; padding: 80px 24px 60px;
+      background:
+        radial-gradient(ellipse 80% 50% at 50% -10%, rgba(79,142,255,0.12) 0%, transparent 70%),
+        var(--bg);
+      position: relative;
+    }
+    .hero-badge {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: rgba(79,142,255,0.08); border: 1px solid rgba(79,142,255,0.2);
+      border-radius: 20px; padding: 5px 14px;
+      font-size: 0.75rem; font-weight: 500; color: var(--accent);
+      margin-bottom: 28px; letter-spacing: 0.5px; text-transform: uppercase;
+    }
+    .hero-badge::before { content: '●'; font-size: 0.5rem; animation: pulse 2s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+    h1 {
+      font-size: clamp(2.4rem, 6vw, 4.2rem);
+      font-weight: 900; line-height: 1.1;
+      letter-spacing: -1.5px; margin-bottom: 20px;
+      color: #fff;
+    }
+    h1 em {
+      font-style: normal;
+      background: linear-gradient(135deg, #4f8eff, #a78bfa);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    }
+    .hero-sub {
+      font-size: 1.05rem; color: var(--text-dim); max-width: 560px;
+      line-height: 1.7; margin-bottom: 40px;
+    }
+    .stats-row {
+      display: flex; gap: 32px; justify-content: center;
+      flex-wrap: wrap; margin-bottom: 52px;
+    }
+    .stat {
+      text-align: center;
+    }
+    .stat-value {
+      font-size: 1.8rem; font-weight: 800; color: #fff; line-height: 1;
+    }
+    .stat-label {
+      font-size: 0.72rem; color: var(--text-muted); margin-top: 4px;
+      text-transform: uppercase; letter-spacing: 0.8px;
+    }
+    .stat-sep { width: 1px; background: var(--border2); align-self: stretch; }
+
+    .scroll-cta {
+      display: flex; flex-direction: column; align-items: center; gap: 6px;
+      color: var(--text-muted); font-size: 0.75rem; text-decoration: none;
+      transition: color 0.2s;
+    }
+    .scroll-cta:hover { color: var(--text-dim); }
+    .scroll-cta svg { animation: bounce 2s ease-in-out infinite; }
+    @keyframes bounce { 0%,100%{transform:translateY(0)} 50%{transform:translateY(5px)} }
+
+    /* ── SECTION COMMON ── */
+    section { padding: 80px 24px; }
+    .section-inner { max-width: 1080px; margin: 0 auto; }
+    .section-label {
+      font-size: 0.7rem; font-weight: 600; letter-spacing: 1.5px;
+      text-transform: uppercase; color: var(--accent); margin-bottom: 12px;
+    }
+    .section-title {
+      font-size: clamp(1.6rem, 3vw, 2.2rem); font-weight: 800;
+      color: #fff; letter-spacing: -0.5px; margin-bottom: 12px;
+    }
+    .section-sub {
+      font-size: 0.95rem; color: var(--text-dim); max-width: 600px;
+      line-height: 1.7; margin-bottom: 48px;
+    }
+
+    /* ── HOW IT WORKS ── */
+    #how { background: var(--surface); border-top: 1px solid var(--border); }
+
+    .pipeline {
+      display: flex; align-items: stretch; gap: 0;
+      flex-wrap: wrap; margin-bottom: 32px;
+    }
+    .model-card {
+      flex: 1; min-width: 200px;
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 24px;
+      position: relative; transition: border-color 0.2s, transform 0.2s;
+    }
+    .model-card:hover { border-color: var(--border2); transform: translateY(-2px); }
+    .model-icon {
+      width: 36px; height: 36px; border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.1rem; margin-bottom: 14px;
+    }
+    .model-icon.cnn  { background: rgba(255,150,50,0.12); }
+    .model-icon.vit  { background: rgba(79,142,255,0.12); }
+    .model-icon.clip { background: rgba(167,139,250,0.12); }
+    .model-name { font-size: 0.85rem; font-weight: 700; color: #fff; margin-bottom: 4px; }
+    .model-type {
+      display: inline-block; font-size: 0.65rem; font-weight: 600;
+      letter-spacing: 0.8px; text-transform: uppercase;
+      padding: 2px 8px; border-radius: 4px; margin-bottom: 10px;
+    }
+    .model-type.cnn  { background: rgba(255,150,50,0.12); color: #ff9632; }
+    .model-type.vit  { background: rgba(79,142,255,0.12);  color: #4f8eff; }
+    .model-type.clip { background: rgba(167,139,250,0.12); color: #a78bfa; }
+    .model-desc { font-size: 0.8rem; color: var(--text-dim); line-height: 1.6; }
+
+    .pipeline-arrow {
+      display: flex; align-items: center; justify-content: center;
+      padding: 0 12px; color: var(--text-muted); font-size: 1.2rem;
+      flex-shrink: 0;
+    }
+    .ensemble-card {
+      background: linear-gradient(135deg, rgba(79,142,255,0.08), rgba(167,139,250,0.06));
+      border: 1px solid rgba(79,142,255,0.2);
+      border-radius: var(--radius); padding: 24px; text-align: center;
+      margin-top: 28px;
+    }
+    .ensemble-card h3 { font-size: 1rem; font-weight: 700; color: #fff; margin-bottom: 6px; }
+    .ensemble-card p { font-size: 0.82rem; color: var(--text-dim); }
+
+    /* ── UPLOAD ── */
+    #upload {
+      background:
+        radial-gradient(ellipse 60% 40% at 50% 100%, rgba(79,142,255,0.06) 0%, transparent 70%),
+        var(--bg);
+      border-top: 1px solid var(--border);
+    }
+
+    .upload-area {
+      border: 2px dashed var(--border2);
+      border-radius: var(--radius);
+      padding: 52px 24px;
+      text-align: center; cursor: pointer;
+      transition: border-color 0.25s, background 0.25s;
+      background: var(--surface2);
+      position: relative;
+    }
+    .upload-area:hover, .upload-area.drag-over {
+      border-color: var(--accent);
+      background: rgba(79,142,255,0.04);
+    }
+    .upload-area input[type=file] {
+      position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%;
+    }
+    .upload-icon {
+      width: 56px; height: 56px; border-radius: 14px;
+      background: rgba(79,142,255,0.1); border: 1px solid rgba(79,142,255,0.15);
+      display: flex; align-items: center; justify-content: center;
+      margin: 0 auto 18px; font-size: 1.5rem;
+    }
+    .upload-title { font-size: 1rem; font-weight: 600; color: #fff; margin-bottom: 6px; }
+    .upload-hint { font-size: 0.8rem; color: var(--text-muted); }
+    .upload-hint span { color: var(--accent); }
+
+    /* preview state */
+    .preview-wrap { display: none; }
+    .preview-wrap.active { display: block; }
+    .upload-area.has-preview { padding: 28px; }
+    .preview-img {
+      max-height: 260px; max-width: 100%;
+      border-radius: var(--radius-sm); display: block; margin: 0 auto 16px;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.4);
+    }
+    .preview-name { font-size: 0.8rem; color: var(--text-dim); margin-bottom: 4px; }
+    .change-link {
+      font-size: 0.78rem; color: var(--accent); cursor: pointer;
+      text-decoration: underline; background: none; border: none;
+    }
+
+    .btn {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 13px 32px; border-radius: var(--radius-sm);
+      font-size: 0.9rem; font-weight: 600; cursor: pointer;
+      border: none; transition: all 0.2s; font-family: inherit;
+    }
+    .btn-primary {
+      background: var(--accent); color: #fff; width: 100%; justify-content: center;
+      margin-top: 20px; font-size: 1rem; padding: 15px;
+    }
+    .btn-primary:hover { background: #6fa0ff; transform: translateY(-1px); }
+    .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+    .btn-outline {
+      background: transparent; color: var(--text-dim);
+      border: 1px solid var(--border2);
+    }
+    .btn-outline:hover { border-color: var(--accent); color: var(--text); }
+
+    /* ── LOADING ── */
+    #loading { display: none; padding: 60px 24px; text-align: center; }
+    #loading.active { display: block; }
+    .spinner {
+      width: 48px; height: 48px; border-radius: 50%;
+      border: 3px solid var(--border2);
+      border-top-color: var(--accent);
+      animation: spin 0.8s linear infinite;
+      margin: 0 auto 24px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loading-title { font-size: 1.1rem; font-weight: 600; color: #fff; margin-bottom: 8px; }
+    .loading-status { font-size: 0.85rem; color: var(--text-dim); }
+    .loading-steps {
+      display: flex; flex-direction: column; gap: 8px;
+      max-width: 320px; margin: 28px auto 0; text-align: left;
+    }
+    .step-item {
+      display: flex; align-items: center; gap: 10px;
+      font-size: 0.8rem; color: var(--text-muted);
+      transition: color 0.3s;
+    }
+    .step-item.active { color: var(--text); }
+    .step-item.done { color: var(--real); }
+    .step-dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: var(--text-muted); flex-shrink: 0; transition: background 0.3s;
+    }
+    .step-item.active .step-dot { background: var(--accent); animation: pulse 1s infinite; }
+    .step-item.done  .step-dot { background: var(--real); animation: none; }
+
+    /* ── RESULTS ── */
+    #results { display: none; border-top: 1px solid var(--border); }
+    #results.active { display: block; }
+
+    .verdict-banner {
+      border-radius: var(--radius); padding: 28px 32px;
+      display: flex; align-items: center; justify-content: space-between;
+      flex-wrap: wrap; gap: 20px; margin-bottom: 40px;
+    }
+    .verdict-banner.fake {
+      background: var(--fake-glow);
+      border: 1px solid rgba(255,77,77,0.25);
+    }
+    .verdict-banner.real {
+      background: var(--real-glow);
+      border: 1px solid rgba(46,204,113,0.25);
+    }
+    .verdict-banner.uncertain {
+      background: var(--uncertain-glow);
+      border: 1px solid rgba(245,166,35,0.25);
+    }
+    .verdict-banner.fake-muted {
+      background: rgba(255,77,77,0.07);
+      border: 1px solid rgba(255,77,77,0.15);
+    }
+    .verdict-banner.real-muted {
+      background: rgba(46,204,113,0.07);
+      border: 1px solid rgba(46,204,113,0.15);
+    }
+    .verdict-left { display: flex; align-items: center; gap: 20px; }
+    .verdict-icon {
+      width: 52px; height: 52px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.4rem; flex-shrink: 0;
+    }
+    .verdict-banner.fake           .verdict-icon { background: rgba(255,77,77,0.15); }
+    .verdict-banner.fake-muted     .verdict-icon { background: rgba(255,77,77,0.10); }
+    .verdict-banner.real           .verdict-icon { background: rgba(46,204,113,0.15); }
+    .verdict-banner.real-muted     .verdict-icon { background: rgba(46,204,113,0.10); }
+    .verdict-banner.uncertain      .verdict-icon { background: rgba(245,166,35,0.15); }
+    .verdict-label {
+      font-size: 2rem; font-weight: 900; letter-spacing: -1px; line-height: 1;
+    }
+    .verdict-banner.fake           .verdict-label { color: var(--fake); }
+    .verdict-banner.fake-muted     .verdict-label { color: rgba(255,77,77,0.75); }
+    .verdict-banner.real           .verdict-label { color: var(--real); }
+    .verdict-banner.real-muted     .verdict-label { color: rgba(46,204,113,0.75); }
+    .verdict-banner.uncertain      .verdict-label { color: var(--uncertain); }
+    .verdict-sub    { font-size: 0.85rem; color: var(--text-dim); margin-top: 4px; }
+    .verdict-reason { font-size: 0.78rem; color: var(--text-muted); margin-top: 5px; font-style: italic; }
+    .verdict-right { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+    .badge {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 5px 12px; border-radius: 20px;
+      font-size: 0.75rem; font-weight: 600;
+    }
+    .badge-conf {
+      background: rgba(255,255,255,0.07); color: var(--text);
+      font-size: 0.85rem; font-weight: 700;
+    }
+    .badge-agree {
+      background: rgba(79,142,255,0.1); color: var(--accent); border: 1px solid rgba(79,142,255,0.2);
+    }
+
+    /* face detection info bar */
+    .face-bar {
+      display: flex; align-items: center; gap: 10px;
+      background: rgba(46,204,113,0.06); border: 1px solid rgba(46,204,113,0.18);
+      border-radius: var(--radius-sm); padding: 10px 16px;
+      font-size: 0.8rem; color: var(--text-dim); margin-bottom: 20px;
+    }
+    .face-bar .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--real); flex-shrink:0; }
+    .face-bar strong { color: var(--real); }
+
+    /* face tabs */
+    .face-tabs {
+      display: flex; gap: 8px; margin-bottom: 24px; flex-wrap: wrap;
+    }
+    .face-tab {
+      padding: 8px 18px; border-radius: var(--radius-sm);
+      font-size: 0.8rem; font-weight: 600; cursor: pointer;
+      border: 1px solid var(--border2); background: var(--surface2);
+      color: var(--text-dim); transition: all 0.2s; font-family: inherit;
+    }
+    .face-tab:hover { border-color: var(--accent); color: var(--text); }
+    .face-tab.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .face-tab.fake   { border-color: rgba(255,77,77,0.4); }
+    .face-tab.fake.active { background: var(--fake); border-color: var(--fake); }
+    .face-tab.real   { border-color: rgba(46,204,113,0.3); }
+    .face-tab.real.active { background: var(--real); border-color: var(--real); }
+    .face-tab.uncertain   { border-color: rgba(245,166,35,0.4); }
+    .face-tab.uncertain.active { background: var(--uncertain); border-color: var(--uncertain); color: #000; }
+
+    /* face panel (one per detected face) */
+    .face-panel { display: none; }
+    .face-panel.active { display: block; }
+
+    /* image panels */
+    .panels-grid {
+      display: grid; grid-template-columns: repeat(4, 1fr);
+      gap: 16px; margin-bottom: 40px;
+    }
+    .panel-card {
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: var(--radius); overflow: hidden;
+      transition: border-color 0.2s;
+    }
+    .panel-card:hover { border-color: var(--border2); }
+    .panel-img {
+      width: 100%; aspect-ratio: 1; object-fit: cover; display: block;
+      background: var(--surface);
+    }
+    .panel-info { padding: 14px 16px; }
+    .panel-title { font-size: 0.82rem; font-weight: 600; color: #fff; margin-bottom: 4px; }
+    .panel-caption { font-size: 0.73rem; color: var(--text-muted); line-height: 1.5; }
+
+    /* story */
+    .story-grid {
+      display: grid; grid-template-columns: 1fr 320px;
+      gap: 20px; align-items: start;
+    }
+    .story-card {
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 24px;
+    }
+    .story-headline {
+      font-size: 1.1rem; font-weight: 700; color: #fff;
+      margin-bottom: 6px;
+    }
+    .story-summary {
+      font-size: 0.875rem; color: var(--text-dim); line-height: 1.7;
+      margin-bottom: 20px; padding-bottom: 20px;
+      border-bottom: 1px solid var(--border);
+    }
+    .evidence-title {
+      font-size: 0.7rem; font-weight: 600; letter-spacing: 1px;
+      text-transform: uppercase; color: var(--text-muted); margin-bottom: 12px;
+    }
+    .evidence-list { display: flex; flex-direction: column; gap: 10px; }
+    .evidence-item {
+      display: flex; gap: 12px; align-items: flex-start;
+      padding: 12px; border-radius: var(--radius-sm);
+      background: rgba(255,255,255,0.02); border: 1px solid var(--border);
+    }
+    .evidence-num {
+      width: 22px; height: 22px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.65rem; font-weight: 700; flex-shrink: 0; margin-top: 1px;
+    }
+    .evidence-num.rank-1 { background: rgba(255,77,77,0.15);  color: #ff4d4d; }
+    .evidence-num.rank-2 { background: rgba(255,150,50,0.15); color: #ff9632; }
+    .evidence-num.rank-3 { background: rgba(255,200,50,0.15); color: #ffc832; }
+    .evidence-num.real-1 { background: rgba(46,204,113,0.15); color: #2ecc71; }
+    .evidence-num.real-2 { background: rgba(46,204,113,0.10); color: #27ae60; }
+    .evidence-num.real-3 { background: rgba(46,204,113,0.07); color: #1e8449; }
+    .evidence-label { font-size: 0.8rem; font-weight: 600; color: var(--text); margin-bottom: 3px; }
+    .evidence-desc  { font-size: 0.76rem; color: var(--text-dim); line-height: 1.5; }
+
+    .model-take { font-size: 0.82rem; color: var(--text-dim); line-height: 1.6; margin-top: 16px; }
+    .closing { font-size: 0.8rem; color: var(--text-muted); margin-top: 10px; font-style: italic; }
+
+    /* scores sidebar */
+    .scores-card {
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 22px;
+    }
+    .scores-title {
+      font-size: 0.7rem; font-weight: 600; letter-spacing: 1px;
+      text-transform: uppercase; color: var(--text-muted); margin-bottom: 16px;
+    }
+    .score-row { margin-bottom: 14px; }
+    .score-header {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 5px;
+    }
+    .score-name { font-size: 0.78rem; font-weight: 500; color: var(--text); }
+    .score-value { font-size: 0.78rem; font-weight: 700; }
+    .score-value.high { color: var(--fake); }
+    .score-value.low  { color: var(--real); }
+    .score-bar-bg {
+      height: 5px; border-radius: 3px; background: var(--border2); overflow: hidden;
+    }
+    .score-bar-fill {
+      height: 100%; border-radius: 3px; transition: width 0.6s ease;
+    }
+    .score-bar-fill.high { background: var(--fake); }
+    .score-bar-fill.low  { background: var(--real); }
+
+    .ensemble-score {
+      margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--border);
+      text-align: center;
+    }
+    .ensemble-num { font-size: 2rem; font-weight: 900; letter-spacing: -1px; }
+    .ensemble-num.fake      { color: var(--fake); }
+    .ensemble-num.real      { color: var(--real); }
+    .ensemble-num.uncertain { color: var(--uncertain); }
+    .score-value.uncertain  { color: var(--uncertain); }
+    .score-bar-fill.uncertain { background: var(--uncertain); }
+    .ensemble-label { font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.8px; }
+
+    .actions-row {
+      display: flex; gap: 12px; justify-content: center;
+      margin-top: 40px;
+    }
+
+    /* ── ERROR ── */
+    .error-box {
+      background: rgba(255,77,77,0.06); border: 1px solid rgba(255,77,77,0.2);
+      border-radius: var(--radius); padding: 16px 20px;
+      color: #ff7070; font-size: 0.85rem; display: none; margin-top: 12px;
+    }
+    .error-box.active { display: block; }
+
+    /* ── FOOTER ── */
+    footer {
+      border-top: 1px solid var(--border); padding: 24px;
+      text-align: center; font-size: 0.75rem; color: var(--text-muted);
+    }
+
+    /* ── RESPONSIVE ── */
+    @media (max-width: 768px) {
+      nav { padding: 0 20px; }
+      .nav-links { display: none; }
+      .stats-row { gap: 20px; }
+      .stat-sep  { display: none; }
+      .pipeline  { flex-direction: column; }
+      .pipeline-arrow { transform: rotate(90deg); padding: 4px 0; }
+      .panels-grid { grid-template-columns: repeat(2, 1fr); }
+      .story-grid  { grid-template-columns: 1fr; }
+      #limits .section-inner > div:last-child { grid-template-columns: 1fr; }
+      #how .section-inner > div:last-child    { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <div class="nav-logo">Sus<span>Scan</span></div>
+  <div class="nav-links">
+    <a href="#how">How It Works</a>
+    <a href="#limits">Limitations</a>
+    <a href="#upload" class="nav-cta">Try It</a>
+  </div>
+</nav>
+
+<!-- HERO -->
+<section id="hero">
+  <h1>Can you trust<br><em>what you see?</em></h1>
+  <p class="hero-sub">
+    SusScan uses a three-model ensemble — EfficientNet-B4, Swin Transformer, and CLIP ViT-B/16 —
+    to detect AI-generated faces, face swaps, and digitally manipulated imagery.
+    Upload any photo and get a forensic breakdown in seconds.
+  </p>
+  <div class="stats-row">
+    <div class="stat">
+      <div class="stat-value">98.5%</div>
+      <div class="stat-label">Accuracy</div>
+    </div>
+    <div class="stat-sep"></div>
+    <div class="stat">
+      <div class="stat-value">0.9985</div>
+      <div class="stat-label">AUC Score</div>
+    </div>
+    <div class="stat-sep"></div>
+    <div class="stat">
+      <div class="stat-value">428K</div>
+      <div class="stat-label">Training Images</div>
+    </div>
+    <div class="stat-sep"></div>
+    <div class="stat">
+      <div class="stat-value">8</div>
+      <div class="stat-label">Datasets</div>
+    </div>
+    <div class="stat-sep"></div>
+    <div class="stat">
+      <div class="stat-value">3</div>
+      <div class="stat-label">AI Models</div>
+    </div>
+  </div>
+  <a href="#upload" class="scroll-cta">
+    <span>Upload an image</span>
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+      <path d="M8 3v10M3 9l5 5 5-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+  </a>
+</section>
+
+<!-- HOW IT WORKS -->
+<section id="how">
+  <div class="section-inner">
+    <div class="section-label">Methodology</div>
+    <h2 class="section-title">Three models. One verdict.</h2>
+    <p class="section-sub">
+      Each model examines the image through a different architectural lens.
+      A verdict requires at least two of the three models to agree — no single model can force a result.
+    </p>
+
+    <div class="pipeline">
+      <div class="model-card">
+        <div class="model-icon cnn">🔬</div>
+        <div class="model-name">EfficientNet-B4</div>
+        <span class="model-type cnn">CNN</span>
+        <p class="model-desc">Scans local pixel-level patterns — blending boundaries, texture discontinuities, and compression artifacts that reveal where a face was composited.</p>
+        <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);font-size:0.72rem;color:var(--text-muted);">
+          <div style="margin-bottom:3px;">Detects: GAN artifacts, JPEG block patterns, frequency anomalies</div>
+          <div>Training weight: 0.39×</div>
+        </div>
+      </div>
+      <div class="pipeline-arrow">→</div>
+      <div class="model-card">
+        <div class="model-icon vit">⚡</div>
+        <div class="model-name">Swin Transformer</div>
+        <span class="model-type vit">Vision Transformer</span>
+        <p class="model-desc">Uses hierarchical shifted-window attention to detect global structural inconsistencies — unnatural geometry, lighting mismatches, and spatial artifacts CNNs can miss.</p>
+        <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);font-size:0.72rem;color:var(--text-muted);">
+          <div style="margin-bottom:3px;">Detects: geometric warping, lighting inconsistencies, structural irregularities</div>
+          <div>Training weight: 1.33×</div>
+        </div>
+      </div>
+      <div class="pipeline-arrow">→</div>
+      <div class="model-card">
+        <div class="model-icon clip">🧠</div>
+        <div class="model-name">CLIP ViT-B/16</div>
+        <span class="model-type clip">Multimodal ViT</span>
+        <p class="model-desc">Pre-trained on 400M image-text pairs, it brings semantic understanding — detecting subtle realism gaps that signal AI generation even at high visual quality.</p>
+        <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);font-size:0.72rem;color:var(--text-muted);">
+          <div style="margin-bottom:3px;">Detects: semantic unnaturalness, AI-generated textures, realism gaps</div>
+          <div>Training weight: 2.34×</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="ensemble-card">
+      <h3>Stacked Ensemble Meta-Learner</h3>
+      <p>A logistic regression meta-learner combines all three model scores using leave-one-dataset-out cross-validation. A <strong>FAKE</strong> verdict requires the meta-learner score to exceed 62% <em>and</em> at least 2 of 3 base models to individually agree — preventing any single model from forcing a false verdict. Scores between 40–62% are returned as <strong>UNCERTAIN</strong>.</p>
+    </div>
+
+    <!-- What it was trained on -->
+    <div style="margin-top:28px;display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:20px;">
+        <div class="section-label" style="margin-bottom:10px;">Training Data</div>
+        <p style="font-size:0.8rem;color:var(--text-dim);line-height:1.7;">Trained across 8 public deepfake datasets totalling 428K images: FaceForensics++, Celeb-DF v2, DFDC, real-and-fake-face, artifact dataset, SD-generated faces, adversarial examples, and a clean real-world subset. Leave-one-dataset-out cross-validation ensures the ensemble generalises beyond any single source.</p>
+      </div>
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:20px;">
+        <div class="section-label" style="margin-bottom:10px;">What GradCAM Shows</div>
+        <p style="font-size:0.8rem;color:var(--text-dim);line-height:1.7;">After scoring, Gradient-weighted Class Activation Maps (GradCAM++) highlight which face regions most influenced the decision. The <em>Activation Hotspot</em> shows the top 30% of model attention, while <em>Detected Regions</em> maps those activations to named facial zones — forehead, eyes, jawline, edges — with plain-language explanations of what each signal means.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- LIMITATIONS -->
+<section id="limits" style="background:var(--surface);border-top:1px solid var(--border);">
+  <div class="section-inner">
+    <div class="section-label">Know the limits</div>
+    <h2 class="section-title">When to trust the result — and when not to.</h2>
+    <p class="section-sub">No deepfake detector is perfect. Understanding where the model is reliable and where it isn't helps you interpret results correctly.</p>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+
+      <!-- False Positives -->
+      <div style="background:var(--surface2);border:1px solid rgba(255,77,77,0.2);border-radius:var(--radius);padding:24px;">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
+          <div style="width:32px;height:32px;border-radius:8px;background:rgba(255,77,77,0.1);display:flex;align-items:center;justify-content:center;font-size:1rem;">⚠️</div>
+          <div>
+            <div style="font-size:0.85rem;font-weight:700;color:var(--fake);">Real images that may be flagged FAKE</div>
+            <div style="font-size:0.72rem;color:var(--text-muted);">False positives — model sees manipulation artifacts where there are none</div>
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:8px;">
+          <div style="font-size:0.78rem;color:var(--text-dim);padding:8px 12px;background:rgba(255,77,77,0.04);border-radius:6px;border-left:2px solid rgba(255,77,77,0.3);">📱 <strong style="color:var(--text);">Portrait mode photos</strong> — face/background compositing produces edge artifacts identical to face-swap seams</div>
+          <div style="font-size:0.78rem;color:var(--text-dim);padding:8px 12px;background:rgba(255,77,77,0.04);border-radius:6px;border-left:2px solid rgba(255,77,77,0.3);">✨ <strong style="color:var(--text);">Beauty filters &amp; skin smoothing</strong> — AI texture blending mimics GAN synthesis patterns</div>
+          <div style="font-size:0.78rem;color:var(--text-dim);padding:8px 12px;background:rgba(255,77,77,0.04);border-radius:6px;border-left:2px solid rgba(255,77,77,0.3);">📤 <strong style="color:var(--text);">Social media re-encoded images</strong> — repeated JPEG compression creates block artifacts similar to deepfake artifacts</div>
+          <div style="font-size:0.78rem;color:var(--text-dim);padding:8px 12px;background:rgba(255,77,77,0.04);border-radius:6px;border-left:2px solid rgba(255,77,77,0.3);">🖼 <strong style="color:var(--text);">Heavy photo editing / Photoshop</strong> — compositing, retouching and layer blending leave detectable seams</div>
+          <div style="font-size:0.78rem;color:var(--text-dim);padding:8px 12px;background:rgba(255,77,77,0.04);border-radius:6px;border-left:2px solid rgba(255,77,77,0.3);">🌙 <strong style="color:var(--text);">Extreme lighting conditions</strong> — very dark, overexposed, or neon-lit photos create unnatural texture responses</div>
+        </div>
+      </div>
+
+      <!-- False Negatives -->
+      <div style="background:var(--surface2);border:1px solid rgba(46,204,113,0.2);border-radius:var(--radius);padding:24px;">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
+          <div style="width:32px;height:32px;border-radius:8px;background:rgba(46,204,113,0.1);display:flex;align-items:center;justify-content:center;font-size:1rem;">🔍</div>
+          <div>
+            <div style="font-size:0.85rem;font-weight:700;color:var(--real);">Fake images that may pass as REAL</div>
+            <div style="font-size:0.72rem;color:var(--text-muted);">False negatives — manipulation too subtle or too different from training data</div>
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:8px;">
+          <div style="font-size:0.78rem;color:var(--text-dim);padding:8px 12px;background:rgba(46,204,113,0.04);border-radius:6px;border-left:2px solid rgba(46,204,113,0.3);">🤖 <strong style="color:var(--text);">High-quality commercial deepfakes</strong> — state-of-the-art models (e.g. HyperReenact, DiffSwap) produce near-zero artifacts</div>
+          <div style="font-size:0.78rem;color:var(--text-dim);padding:8px 12px;background:rgba(46,204,113,0.04);border-radius:6px;border-left:2px solid rgba(46,204,113,0.3);">🖼 <strong style="color:var(--text);">Fully AI-generated faces (GAN / Diffusion)</strong> — no real face underneath means no compositing seams; purely synthetic faces can fool the model</div>
+          <div style="font-size:0.78rem;color:var(--text-dim);padding:8px 12px;background:rgba(46,204,113,0.04);border-radius:6px;border-left:2px solid rgba(46,204,113,0.3);">📉 <strong style="color:var(--text);">Low resolution or heavily compressed fakes</strong> — compression masks manipulation artifacts, reducing detection signal</div>
+          <div style="font-size:0.78rem;color:var(--text-dim);padding:8px 12px;background:rgba(46,204,113,0.04);border-radius:6px;border-left:2px solid rgba(46,204,113,0.3);">🎭 <strong style="color:var(--text);">Adversarial deepfakes</strong> — images crafted specifically to fool detectors by adding imperceptible noise patterns</div>
+          <div style="font-size:0.78rem;color:var(--text-dim);padding:8px 12px;background:rgba(46,204,113,0.04);border-radius:6px;border-left:2px solid rgba(46,204,113,0.3);">↩ <strong style="color:var(--text);">Deepfakes post-processed to look old / degraded</strong> — film grain, scan artifacts and noise can wash out detection signals</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- UPLOAD -->
+<section id="upload">
+  <div class="section-inner">
+    <div class="section-label">Analysis</div>
+    <h2 class="section-title">Upload a face image</h2>
+    <p class="section-sub">
+      For best results, use a close-up face photo where the face fills most of the frame.
+      Supports JPG, PNG, and WebP up to 15 MB.
+    </p>
+    <div style="background:rgba(245,166,35,0.07);border:1px solid rgba(245,166,35,0.25);border-radius:var(--radius);padding:18px 20px;margin-bottom:28px;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+        <span style="font-size:1.1rem;">⚠️</span>
+        <strong style="color:var(--uncertain);font-size:0.9rem;">Before you upload — read this</strong>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div style="font-size:0.78rem;color:var(--text-dim);line-height:1.6;">
+          <strong style="color:var(--text);display:block;margin-bottom:4px;">May cause false FAKE results:</strong>
+          Portrait mode · Beauty/skin filters · Heavy photo editing · Social media re-uploads · Extreme lighting
+        </div>
+        <div style="font-size:0.78rem;color:var(--text-dim);line-height:1.6;">
+          <strong style="color:var(--text);display:block;margin-bottom:4px;">Best image types to upload:</strong>
+          Standard camera mode · Original file (not screenshot) · Clear frontal face · Good lighting · No filters
+        </div>
+      </div>
+    </div>
+
+    <div class="upload-area" id="dropZone">
+      <input type="file" id="fileInput" accept="image/jpeg,image/png,image/webp,image/bmp" />
+
+      <div id="uploadPrompt">
+        <div class="upload-icon">📁</div>
+        <div class="upload-title">Drag &amp; drop your image here</div>
+        <div class="upload-hint">or <span>click to browse</span></div>
+      </div>
+
+      <div class="preview-wrap" id="previewWrap">
+        <img class="preview-img" id="previewImg" src="" alt="Preview" />
+        <div class="preview-name" id="previewName"></div>
+        <button class="change-link" id="changeBtn" type="button">Change image</button>
+      </div>
+    </div>
+
+    <div class="error-box" id="errorBox"></div>
+
+    <button class="btn btn-primary" id="analyzeBtn" style="display:none" type="button">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+        <circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.5"/>
+        <path d="M8 5v3.5l2.5 1.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      </svg>
+      Analyze Image
+    </button>
+  </div>
+</section>
+
+<!-- LOADING -->
+<section id="loading">
+  <div class="section-inner" style="max-width:480px">
+    <div class="spinner"></div>
+    <div class="loading-title">Analyzing your image</div>
+    <div class="loading-status" id="loadingStatus">Initializing...</div>
+    <div class="loading-steps">
+      <div class="step-item" id="step0"><div class="step-dot"></div> Detecting &amp; cropping face</div>
+      <div class="step-item" id="step1"><div class="step-dot"></div> Preprocessing for models</div>
+      <div class="step-item" id="step2"><div class="step-dot"></div> Running EfficientNet-B4</div>
+      <div class="step-item" id="step3"><div class="step-dot"></div> Running Swin Transformer</div>
+      <div class="step-item" id="step4"><div class="step-dot"></div> Running CLIP ViT-B/16</div>
+      <div class="step-item" id="step5"><div class="step-dot"></div> Computing GradCAM heatmaps</div>
+      <div class="step-item" id="step6"><div class="step-dot"></div> Generating report</div>
+    </div>
+  </div>
+</section>
+
+<!-- RESULTS -->
+<section id="results">
+  <div class="section-inner">
+
+    <!-- verdict banner -->
+    <div class="verdict-banner" id="verdictBanner">
+      <div class="verdict-left">
+        <div class="verdict-icon" id="verdictIcon"></div>
+        <div>
+          <div class="verdict-label" id="verdictLabel"></div>
+          <div class="verdict-sub" id="verdictSub"></div>
+        </div>
+      </div>
+      <div class="verdict-right">
+        <span class="badge badge-conf" id="confBadge"></span>
+        <span class="badge badge-agree" id="agreeBadge"></span>
+      </div>
+    </div>
+
+    <!-- face detection info -->
+    <div class="face-bar" id="faceBar">
+      <div class="dot"></div>
+      <span id="faceBarText"></span>
+    </div>
+
+    <!-- original upload (always visible) -->
+    <div class="panels-grid" style="grid-template-columns: 1fr 3fr; margin-bottom: 24px;">
+      <div class="panel-card">
+        <img class="panel-img" id="imgInputFull" src="" alt="Your Upload" />
+        <div class="panel-info">
+          <div class="panel-title">Your Upload</div>
+          <div class="panel-caption">All detected faces outlined. Each numbered face is analyzed separately below.</div>
+        </div>
+      </div>
+      <div style="background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; display: flex; flex-direction: column; justify-content: center;">
+        <div class="section-label" style="margin-bottom: 8px;">Select a face to view its analysis</div>
+        <div class="face-tabs" id="faceTabs"></div>
+        <p style="font-size:0.78rem; color: var(--text-muted);">Switch between faces using the tabs above. Each face is independently run through all three models.</p>
+      </div>
+    </div>
+
+    <!-- per-face panels (one shown at a time) -->
+    <div id="facePanels"></div>
+
+    <div class="actions-row">
+      <button class="btn btn-outline" id="resetBtn" type="button">↩ Analyze Another Image</button>
+    </div>
+
+  </div>
+</section>
+
+<footer>
+  
+</footer>
+
+<script>
+  const dropZone    = document.getElementById('dropZone');
+  const fileInput   = document.getElementById('fileInput');
+  const uploadPrompt= document.getElementById('uploadPrompt');
+  const previewWrap = document.getElementById('previewWrap');
+  const previewImg  = document.getElementById('previewImg');
+  const previewName = document.getElementById('previewName');
+  const changeBtn   = document.getElementById('changeBtn');
+  const analyzeBtn  = document.getElementById('analyzeBtn');
+  const errorBox    = document.getElementById('errorBox');
+
+  const loadingSection = document.getElementById('loading');
+  const resultsSection = document.getElementById('results');
+  const uploadSection  = document.getElementById('upload');
+
+  let selectedFile = null;
+
+  // ── file selection ──────────────────────────────────────────────────────────
+
+  fileInput.addEventListener('change', e => {
+    if (e.target.files[0]) handleFile(e.target.files[0]);
+  });
+
+  dropZone.addEventListener('dragover', e => {
+    e.preventDefault(); dropZone.classList.add('drag-over');
+  });
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+  dropZone.addEventListener('drop', e => {
+    e.preventDefault(); dropZone.classList.remove('drag-over');
+    if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
+  });
+
+  changeBtn.addEventListener('click', e => {
+    e.stopPropagation();
+    fileInput.value = '';
+    fileInput.click();
+  });
+
+  function handleFile(file) {
+    const allowed = ['image/jpeg','image/png','image/webp','image/bmp'];
+    if (!allowed.includes(file.type)) {
+      showError('Please upload a JPG, PNG, or WebP image.');
+      return;
+    }
+    if (file.size > 15 * 1024 * 1024) {
+      showError('File too large. Maximum size is 15 MB.');
+      return;
+    }
+    hideError();
+    selectedFile = file;
+
+    const reader = new FileReader();
+    reader.onload = ev => {
+      previewImg.src = ev.target.result;
+      previewName.textContent = file.name;
+      uploadPrompt.style.display = 'none';
+      previewWrap.classList.add('active');
+      dropZone.classList.add('has-preview');
+      analyzeBtn.style.display = 'flex';
+    };
+    reader.readAsDataURL(file);
+  }
+
+  // ── analyze ─────────────────────────────────────────────────────────────────
+
+  analyzeBtn.addEventListener('click', () => {
+    if (!selectedFile) return;
+    runAnalysis(selectedFile);
+  });
+
+  const STEPS = [
+    'Detecting & cropping face',
+    'Preprocessing for models',
+    'Running EfficientNet-B4',
+    'Running Swin Transformer',
+    'Running CLIP ViT-B/16',
+    'Computing GradCAM heatmaps',
+    'Generating report',
+  ];
+  const STEP_DELAYS = [400, 900, 1800, 2700, 3600, 4800, 6000];
+
+  async function runAnalysis(file) {
+    uploadSection.style.display    = 'none';
+    loadingSection.classList.add('active');
+    resultsSection.classList.remove('active');
+
+    // animate steps
+    let stepTimers = [];
+    for (let i = 0; i < STEPS.length; i++) {
+      stepTimers.push(setTimeout(() => {
+        if (i > 0) {
+          document.getElementById(`step${i-1}`).classList.remove('active');
+          document.getElementById(`step${i-1}`).classList.add('done');
+        }
+        document.getElementById(`step${i}`).classList.add('active');
+        document.getElementById('loadingStatus').textContent = STEPS[i] + '...';
+      }, STEP_DELAYS[i]));
+    }
+
+    const form = new FormData();
+    form.append('file', file);
+
+    try {
+      const res = await fetch('/analyze', { method: 'POST', body: form });
+      stepTimers.forEach(clearTimeout);
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail || 'Analysis failed.');
+      }
+
+      const data = await res.json();
+
+      // mark all steps done
+      for (let i = 0; i < STEPS.length; i++) {
+        const el = document.getElementById(`step${i}`);
+        el.classList.remove('active'); el.classList.add('done');
+      }
+
+      setTimeout(() => {
+        loadingSection.classList.remove('active');
+        displayResults(data);
+        resultsSection.classList.add('active');
+        resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 400);
+
+    } catch (err) {
+      stepTimers.forEach(clearTimeout);
+      loadingSection.classList.remove('active');
+      uploadSection.style.display = '';
+      showError(err.message || 'Something went wrong. Please try again.');
+    }
+  }
+
+  // ── display results ──────────────────────────────────────────────────────────
+
+  function buildFacePanel(fr) {
+    const pred        = fr.prediction;
+    const uiColor     = fr.ui_color  || 'amber';    // "red" | "green" | "amber"
+    const uiMuted     = fr.ui_muted  || false;
+    const uiLabel     = fr.ui_label  || pred;
+    const isFake      = uiColor === 'red';
+    const isUncertain = uiColor === 'amber';
+    const story       = fr.story;
+    const rankClasses = isFake ? ['rank-1','rank-2','rank-3']
+                      : isUncertain ? ['rank-2','rank-2','rank-3']
+                      : ['real-1','real-2','real-3'];
+
+    const evidenceHTML = story.evidence.map((e, i) => `
+      <div class="evidence-item">
+        <div class="evidence-num ${rankClasses[i] || rankClasses[2]}">${i+1}</div>
+        <div>
+          <div class="evidence-label">${e.label}</div>
+          <div class="evidence-desc">${e.description}</div>
+        </div>
+      </div>`).join('');
+
+    const scoreRowsHTML = story.model_breakdown.map(m => {
+      const pct = Math.round(m.score * 100);
+      const cls = isUncertain && Math.abs(m.score - 0.5) < 0.12 ? 'uncertain'
+                : m.score >= 0.5 ? 'high' : 'low';
+      return `
+        <div class="score-row">
+          <div class="score-header">
+            <span class="score-name">${m.name}</span>
+            <span class="score-value ${cls}">${pct}%</span>
+          </div>
+          <div class="score-bar-bg">
+            <div class="score-bar-fill ${cls}" style="width:${pct}%"></div>
+          </div>
+        </div>`;
+    }).join('');
+
+    // Derive CSS class from ui_color + muted flag
+    let bannerClass;
+    if (uiColor === 'red')        bannerClass = uiMuted ? 'fake-muted' : 'fake';
+    else if (uiColor === 'green') bannerClass = uiMuted ? 'real-muted' : 'real';
+    else                          bannerClass = 'uncertain';
+
+    const icon      = isFake ? '⚠️' : isUncertain ? '❓' : '✅';
+    const ensClass  = isFake ? 'fake' : isUncertain ? 'uncertain' : 'real';
+    const confLabel = isUncertain ? `${fr.confidence}% fake probability` : `${fr.confidence}% confident`;
+    const reasonHTML = fr.reason ? `<div class="verdict-reason">${fr.reason}</div>` : '';
+
+    return `
+      <div class="verdict-banner ${bannerClass}" style="margin-bottom:24px">
+        <div class="verdict-left">
+          <div class="verdict-icon">${icon}</div>
+          <div>
+            <div class="verdict-label">${uiLabel}</div>
+            <div class="verdict-sub">${story.summary}</div>
+            ${reasonHTML}
+          </div>
+        </div>
+        <div class="verdict-right">
+          <span class="badge badge-conf">${confLabel}</span>
+          <span class="badge badge-agree">🤝 ${fr.model_agreement}</span>
+        </div>
+      </div>
+
+      <div class="panels-grid" style="margin-bottom:28px">
+        <div class="panel-card">
+          <img class="panel-img" src="data:image/jpeg;base64,${fr.images.face_crop}" alt="Face Crop" />
+          <div class="panel-info">
+            <div class="panel-title">Face (Model Input)</div>
+            <div class="panel-caption">Cropped and resized face passed into all three models.</div>
+          </div>
+        </div>
+        <div class="panel-card">
+          <img class="panel-img" src="data:image/jpeg;base64,${fr.images.annotated}" alt="Detected Regions" />
+          <div class="panel-info">
+            <div class="panel-title">Detected Regions</div>
+            <div class="panel-caption">Face zones with the strongest manipulation signals, ranked by intensity.</div>
+          </div>
+        </div>
+        <div class="panel-card">
+          <img class="panel-img" src="data:image/jpeg;base64,${fr.images.hotspot}" alt="Hotspot" />
+          <div class="panel-info">
+            <div class="panel-title">Activation Hotspot</div>
+            <div class="panel-caption">Top 30% of model attention — shows exactly where detection signal concentrates.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="story-grid">
+        <div class="story-card">
+          <div class="story-headline">${story.headline}</div>
+          <div class="story-summary">${story.summary}</div>
+          <div class="evidence-title">Signal Breakdown</div>
+          <div class="evidence-list">${evidenceHTML}</div>
+          <p class="model-take">${story.model_take}</p>
+          <p class="closing">${story.closing}</p>
+        </div>
+        <div class="scores-card">
+          <div class="scores-title">Model Scores</div>
+          ${scoreRowsHTML}
+          <div class="ensemble-score">
+            <div class="ensemble-num ${ensClass}">${(fr.ensemble_score * 100).toFixed(1)}%</div>
+            <div class="ensemble-label">Ensemble Score</div>
+          </div>
+        </div>
+      </div>`;
+  }
+
+  function displayResults(data) {
+    // face info bar
+    const n = data.faces_found;
+    document.getElementById('faceBarText').innerHTML =
+      n === 1
+        ? '<strong>1 face detected</strong> — analyzed below.'
+        : `<strong>${n} faces detected</strong> — each face analyzed independently. Use the tabs to switch.`;
+
+    // original annotated image
+    document.getElementById('imgInputFull').src = 'data:image/jpeg;base64,' + data.input_full;
+
+    // build tabs + panels for each face
+    const tabsEl   = document.getElementById('faceTabs');
+    const panelsEl = document.getElementById('facePanels');
+    tabsEl.innerHTML = '';
+    panelsEl.innerHTML = '';
+
+    // overall verdict: red > amber > green (use ui_color from most severe face)
+    // Severity order: red (STRONG_FAKE / LIKELY_FAKE) > amber (UNCERTAIN) > green
+    const anyRed    = data.face_results.some(fr => fr.ui_color === 'red');
+    const anyAmber  = data.face_results.some(fr => fr.ui_color === 'amber');
+    const overallCls = anyRed ? 'fake' : anyAmber ? 'uncertain' : 'real';
+    const banner = document.getElementById('verdictBanner');
+    banner.className = 'verdict-banner ' + overallCls;
+    document.getElementById('verdictIcon').textContent =
+      anyRed ? '⚠️' : anyAmber ? '❓' : '✅';
+    document.getElementById('verdictLabel').textContent =
+      anyRed ? 'MANIPULATION DETECTED' : anyAmber ? 'UNCERTAIN' : 'AUTHENTIC';
+    let overallSub;
+    if (anyRed)
+      overallSub = `${data.face_results.filter(f=>f.ui_color==='red').length} of ${n} face(s) show signs of manipulation.`;
+    else if (anyAmber)
+      overallSub = 'The model is not confident enough for a definitive verdict. Manual review recommended.';
+    else
+      overallSub = `All ${n} face(s) appear authentic.`;
+    document.getElementById('verdictSub').textContent = overallSub;
+    document.getElementById('confBadge').textContent  = '';
+    document.getElementById('agreeBadge').textContent = '';
+
+    data.face_results.forEach((fr, i) => {
+      // Use ui_color for tab color class
+      const tabCls = fr.ui_color === 'red' ? 'fake'
+                   : fr.ui_color === 'amber' ? 'uncertain' : 'real';
+
+      // tab
+      const tab = document.createElement('button');
+      tab.className = `face-tab ${tabCls}${i === 0 ? ' active' : ''}`;
+      tab.textContent = `Face ${i + 1} — ${fr.ui_label || fr.prediction} (${fr.confidence}%)`;
+      tab.dataset.idx = i;
+      tab.addEventListener('click', () => switchFace(i));
+      tabsEl.appendChild(tab);
+
+      // panel
+      const panel = document.createElement('div');
+      panel.className = 'face-panel' + (i === 0 ? ' active' : '');
+      panel.id = `face-panel-${i}`;
+      panel.innerHTML = buildFacePanel(fr);
+      panelsEl.appendChild(panel);
+    });
+  }
+
+  function switchFace(idx) {
+    document.querySelectorAll('.face-tab').forEach((t, i) => {
+      t.classList.toggle('active', i === idx);
+    });
+    document.querySelectorAll('.face-panel').forEach((p, i) => {
+      p.classList.toggle('active', i === idx);
+    });
+  }
+
+  // ── reset ────────────────────────────────────────────────────────────────────
+
+  document.getElementById('resetBtn').addEventListener('click', resetAll);
+
+  function resetAll() {
+    selectedFile = null;
+    fileInput.value = '';
+    previewImg.src = '';
+    previewWrap.classList.remove('active');
+    dropZone.classList.remove('has-preview');
+    uploadPrompt.style.display = '';
+    analyzeBtn.style.display = 'none';
+    hideError();
+
+    // reset step indicators
+    for (let i = 0; i < STEPS.length; i++) {
+      const el = document.getElementById(`step${i}`);
+      el.classList.remove('active','done');
+    }
+
+    resultsSection.classList.remove('active');
+    uploadSection.style.display = '';
+    uploadSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  // ── helpers ──────────────────────────────────────────────────────────────────
+
+  function showError(msg) {
+    errorBox.textContent = '⚠ ' + msg;
+    errorBox.classList.add('active');
+  }
+  function hideError() {
+    errorBox.classList.remove('active');
+  }
+</script>
+</body>
+</html>
