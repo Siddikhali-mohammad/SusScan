@@ -1,6 +1,5 @@
 from .trainer import (
     ManualSWA,
-    CompileSafeEMA,
     SmoothBCEWithLogits,
     freeze_backbone,
     unfreeze_backbone,
@@ -17,7 +16,6 @@ from .train_clip import train_clip
 
 __all__ = [
     "ManualSWA",
-    "CompileSafeEMA",
     "SmoothBCEWithLogits",
     "freeze_backbone",
     "unfreeze_backbone",

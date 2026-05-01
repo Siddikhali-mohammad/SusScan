@@ -1,7 +1,7 @@
 from .efficientnet import TimmBinaryWrapper, build_efb4
 from .swin import build_swin_t
 from .clip_vit import build_clip_vit_b16
-from .ensemble import load_base_models, load_meta_learner, predict_ensemble
+from .ensemble import load_base_models, load_meta_learner
 
 __all__ = [
     "TimmBinaryWrapper",
@@ -10,5 +10,4 @@ __all__ = [
     "build_clip_vit_b16",
     "load_base_models",
     "load_meta_learner",
-    "predict_ensemble",
 ]

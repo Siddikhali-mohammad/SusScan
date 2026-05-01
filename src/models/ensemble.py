@@ -1,7 +1,6 @@
 import pickle
 from pathlib import Path
 
-import numpy as np
 import torch
 
 from .efficientnet import build_efb4
@@ -56,20 +55,3 @@ def load_meta_learner(checkpoint_dir):
     return meta
 
 
-@torch.no_grad()
-def predict_ensemble(models, meta_learner, images, device=None, amp_dtype=torch.bfloat16):
-    if device is None:
-        device = next(iter(models.values())).parameters().__next__().device
-
-    images = images.to(device, non_blocking=True)
-    from torch.cuda.amp import autocast
-
-    probs = []
-    for key in ("efb4", "swin", "clip"):
-        models[key].eval()
-        with autocast(dtype=amp_dtype):
-            logits = models[key](images)
-        probs.append(torch.sigmoid(logits.float()).cpu().numpy())
-
-    # order matters — must match meta-learner training order
-    return meta_learner.predict_proba(np.stack(probs, axis=1))[:, 1]

@@ -1,6 +1,5 @@
 import json
 import time
-from copy import deepcopy
 from pathlib import Path
 
 import numpy as np
@@ -42,28 +41,6 @@ class ManualSWA:
     def _strip(sd):
         # torch.compile prefixes everything with "_orig_mod." — strip it
         return {k.replace("_orig_mod.", ""): v for k, v in sd.items()}
-
-
-class CompileSafeEMA:
-    # not used in the final training run, keeping it around just in case
-    def __init__(self, model, decay=0.9999):
-        base = model._orig_mod if hasattr(model, "_orig_mod") else model
-        self.ema = deepcopy(base).eval()
-        for p in self.ema.parameters():
-            p.requires_grad = False
-        self.decay = decay
-
-    @torch.no_grad()
-    def update(self, model):
-        msd = ManualSWA._strip(model.state_dict())
-        for k, v in self.ema.state_dict().items():
-            if v.dtype.is_floating_point and k in msd:
-                v.mul_(self.decay).add_(msd[k].detach(), alpha=1 - self.decay)
-            elif k in msd:
-                v.copy_(msd[k])
-
-    def state_dict(self):
-        return self.ema.state_dict()
 
 
 class SmoothBCEWithLogits(nn.Module):

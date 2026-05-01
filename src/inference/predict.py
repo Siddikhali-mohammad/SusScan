@@ -16,42 +16,6 @@ from ..classification.verdict import classify, Verdict
 from ..calibration.temperature_scaling import TemperatureScaler
 
 
-# SUPERSEDED by src/classification/verdict.py — kept for A/B comparison
-# Decision thresholds.
-# prob < LOW                          → REAL
-# LOW ≤ prob ≤ HIGH                   → UNCERTAIN
-# prob > HIGH AND base majority agree → FAKE
-# prob > HIGH BUT base models split   → UNCERTAIN (CLIP-dominated false positive)
-# _FAKE_THRESHOLD_HIGH = 0.62
-# _FAKE_THRESHOLD_LOW  = 0.40
-#
-#
-# def _classify(prob, individual_scores=None):
-#     """
-#     Three-state classifier with a base-model majority veto.
-#
-#     The meta-learner gives CLIP 2.34× weight and carries a +0.687 intercept
-#     (baseline ~66% fake even when all models are uncertain). This means CLIP alone
-#     can push the ensemble above the FAKE threshold even when EFB4 and Swin both
-#     say REAL. The veto ensures a FAKE verdict requires at least 2/3 base models
-#     to individually agree (prob > 0.5) — preventing single-model dominance.
-#     """
-#     if prob <= _FAKE_THRESHOLD_LOW:
-#         return "REAL", 1.0 - prob
-#
-#     if prob >= _FAKE_THRESHOLD_HIGH:
-#         if individual_scores is not None:
-#             fake_votes = sum(1 for s in individual_scores.values() if s >= 0.5)
-#             if fake_votes >= 2:
-#                 return "FAKE", prob
-#             # Meta-learner fired but base models don't agree — likely CLIP-dominated
-#             return "UNCERTAIN", prob
-#
-#         return "FAKE", prob   # fallback if no individual scores provided
-#
-#     return "UNCERTAIN", prob
-
-
 def _load_calibration(checkpoint_dir):
     scalers = {}
     calib_dir = Path(checkpoint_dir) / "calibration"

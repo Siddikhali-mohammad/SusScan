@@ -26,19 +26,6 @@ data:
   batch_size: 96
   num_workers: 12
   val_frac: 0.20
-  all_datasets:
-    - deepfake_and_real_clean_v1
-    - 140k_clean_v1
-    - artifact_clean_v2
-    - ffpp_c23
-    - celeb_df_v2
-    - sd_generated
-    - adversarial
-    - real_and_fake_face_clean_v1
-  # these only contain fake images — use detection rate instead of AUROC
-  single_class_datasets:
-    - sd_generated
-    - adversarial
 
 normalization:
   imagenet:
@@ -64,7 +51,6 @@ efb4:
   drop_rate: 0.3
   drop_path_rate: 0.2
   use_compile: true
-  use_channels_last: true
 
 swin:
   total_epochs: 10
@@ -92,13 +78,3 @@ meta_learner:
   class_weight: "balanced"
   solver: "lbfgs"
 
-# sweep order: roughly easiest to hardest so early folds finish fast
-loo_sweep_order:
-  - celeb_df_v2
-  - ffpp_c23
-  - 140k_clean_v1
-  - artifact_clean_v2
-  - deepfake_and_real_clean_v1
-  - real_and_fake_face_clean_v1
-  - sd_generated
-  - adversarial

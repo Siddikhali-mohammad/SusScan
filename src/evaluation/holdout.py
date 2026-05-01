@@ -9,6 +9,7 @@ import pandas as pd
 import torch
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import roc_auc_score
+from sklearn.preprocessing import StandardScaler
 from torch.cuda.amp import autocast
 from torch.utils.data import DataLoader
 
@@ -134,24 +135,33 @@ def run_one_holdout(holdout_name, master_df, model_configs, loo_ckpt_dir, loo_lo
             torch.cuda.empty_cache()
 
     model_names = list(model_configs.keys())
-    val_feats = np.stack([val_probs[n] for n in model_names], axis=1)
+    val_probs_arr = np.stack([val_probs[n] for n in model_names], axis=1)
+    val_feats = np.column_stack([
+        val_probs_arr,
+        val_probs_arr.mean(axis=1),
+        val_probs_arr.std(axis=1),
+        val_probs_arr.max(axis=1) - val_probs_arr.min(axis=1),
+    ])
+
+    scaler = StandardScaler()
+    val_feats_scaled = scaler.fit_transform(val_feats)
 
     print(f"\nfitting meta-learner on {len(val_labels):,} val samples...")
     meta = LogisticRegression(C=meta_C, max_iter=1000, class_weight="balanced",
                                solver="lbfgs", random_state=seed)
-    meta.fit(val_feats, val_labels)
+    meta.fit(val_feats_scaled, val_labels)
 
     coefs = meta.coef_[0]
-    for name, coef in zip(model_names, coefs):
+    for name, coef in zip(model_names, coefs[:3]):
         print(f"  {name}: {coef:+.3f}")
     print(f"  intercept: {meta.intercept_[0]:+.3f}")
 
-    val_ens_probs = meta.predict_proba(val_feats)[:, 1]
+    val_ens_probs = meta.predict_proba(val_feats_scaled)[:, 1]
     val_auroc = roc_auc_score(val_labels, val_ens_probs)
     print(f"  val AUROC: {val_auroc:.4f}")
 
     with open(ckpt_dir / "meta_learner.pkl", "wb") as f:
-        pickle.dump(meta, f)
+        pickle.dump({"meta": meta, "scaler": scaler}, f)
 
     test_df = loaders["test_df"]
     print(f"\nrunning TTA on {len(test_df):,} test images...")
@@ -176,9 +186,14 @@ def run_one_holdout(holdout_name, master_df, model_configs, loo_ckpt_dir, loo_lo
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
 
-    ens_probs = meta.predict_proba(
-        np.stack([test_probs[n] for n in model_names], axis=1)
-    )[:, 1]
+    test_probs_arr = np.stack([test_probs[n] for n in model_names], axis=1)
+    test_feats = np.column_stack([
+        test_probs_arr,
+        test_probs_arr.mean(axis=1),
+        test_probs_arr.std(axis=1),
+        test_probs_arr.max(axis=1) - test_probs_arr.min(axis=1),
+    ])
+    ens_probs = meta.predict_proba(scaler.transform(test_feats))[:, 1]
 
     # compute and print final metrics
     model_metrics = {n: compute_holdout_metrics(test_probs[n], test_labels, holdout_name) for n in model_names}
@@ -230,47 +245,3 @@ def run_one_holdout(holdout_name, master_df, model_configs, loo_ckpt_dir, loo_lo
     return summary
 
 
-def run_sweep(sweep_order, master_df, model_configs, loo_ckpt_dir, loo_log_dir,
-              loo_results_dir, state_file, device, **holdout_kwargs):
-    state_path = Path(state_file)
-
-    def load_state():
-        if state_path.exists():
-            return json.load(open(state_path))
-        return {"completed": [], "results": {}}
-
-    def save_state(s):
-        json.dump(s, open(state_path, "w"), indent=2, default=str)
-
-    state = load_state()
-    done = state["completed"]
-    remaining = [h for h in sweep_order if h not in done]
-    print(f"completed: {done}")
-    print(f"remaining: {remaining}")
-
-    t_start = time.time()
-
-    for holdout in sweep_order:
-        if holdout in done:
-            print(f"\nskipping {holdout} (already done)")
-            continue
-
-        n_done = len(state["completed"])
-        elapsed_min = (time.time() - t_start) / 60
-        print(f"\n{holdout}  ({n_done+1}/{len(sweep_order)})  elapsed={elapsed_min:.1f}min")
-
-        try:
-            summary = run_one_holdout(holdout, master_df, model_configs,
-                                      loo_ckpt_dir, loo_log_dir, loo_results_dir,
-                                      device, **holdout_kwargs)
-            state["completed"].append(holdout)
-            state["results"][holdout] = summary
-            save_state(state)
-        except Exception as e:
-            print(f"\nerror on {holdout}: {e}")
-            save_state(state)
-            raise
-
-    total_min = (time.time() - t_start) / 60
-    print(f"\nall done — {len(state['completed'])} holdouts in {total_min:.1f} min")
-    return state

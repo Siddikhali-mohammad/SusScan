@@ -15,6 +15,7 @@ import numpy as np
 import torch
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import roc_auc_score
+from sklearn.preprocessing import StandardScaler
 
 from src.utils import set_seed, load_config
 from src.data import load_master_csv, build_holdout_loaders
@@ -67,21 +68,30 @@ def main():
         del m
         if torch.cuda.is_available(): torch.cuda.empty_cache()
 
-    feats = np.stack([val_probs["efb4"], val_probs["swin"], val_probs["clip"]], axis=1)
+    probs_arr = np.stack([val_probs["efb4"], val_probs["swin"], val_probs["clip"]], axis=1)
+    feats = np.column_stack([
+        probs_arr,
+        probs_arr.mean(axis=1),
+        probs_arr.std(axis=1),
+        probs_arr.max(axis=1) - probs_arr.min(axis=1),
+    ])
+
+    scaler = StandardScaler()
+    feats_scaled = scaler.fit_transform(feats)
 
     print(f"\nfitting on {len(val_labels):,} samples...")
     meta = LogisticRegression(C=cfg.meta_learner.C, max_iter=cfg.meta_learner.max_iter,
                                class_weight=cfg.meta_learner.class_weight,
                                solver=cfg.meta_learner.solver, random_state=cfg.seed)
-    meta.fit(feats, val_labels)
+    meta.fit(feats_scaled, val_labels)
 
     c = meta.coef_[0]
     print(f"  efb4={c[0]:+.4f}  swin={c[1]:+.4f}  clip={c[2]:+.4f}  intercept={meta.intercept_[0]:+.4f}")
-    print(f"  val AUROC: {roc_auc_score(val_labels, meta.predict_proba(feats)[:, 1]):.4f}")
+    print(f"  val AUROC: {roc_auc_score(val_labels, meta.predict_proba(feats_scaled)[:, 1]):.4f}")
 
     out = Path(args.output)
     out.parent.mkdir(parents=True, exist_ok=True)
-    pickle.dump(meta, open(out, "wb"))
+    pickle.dump({"meta": meta, "scaler": scaler}, open(out, "wb"))
     print(f"\nsaved: {out}")
 
 

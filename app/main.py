@@ -16,15 +16,17 @@ import numpy as np
 
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 from src.utils import set_seed, load_config
 from src.inference.predict import DeepfakePredictor
 from src.inference.visualize import (
-    build_annotated, build_hotspot, img_to_b64, build_combined_png,
+    build_annotated, build_hotspot, img_to_b64,
 )
-from src.data.face_detector import detect_and_crop_all, draw_face_boxes
+from src.data.face_detector import (
+    detect_and_crop_all, draw_face_boxes, normalize_face_orientation,
+)
 
 CHECKPOINT_DIR = os.getenv("CHECKPOINT_DIR", "checkpoints")
 CONFIG_PATH    = os.getenv("CONFIG_PATH",    "configs/default.yaml")
@@ -109,14 +111,53 @@ async def analyze(file: UploadFile = File(...)):
             detail="No face detected in the image. Please upload a clear, front-facing photo."
         )
 
-    all_bboxes = [b for _, b in faces]
+    all_bboxes = [b for _, b, _ in faces]
 
     # annotate original showing all detected faces
     img_annotated_full = draw_face_boxes(img, all_bboxes)
 
     # analyze every detected face
     face_results = []
-    for face_idx, (face_crop, bbox) in enumerate(faces):
+    for face_idx, (raw_crop, bbox, lm) in enumerate(faces):
+        face_crop, ori_status = normalize_face_orientation(raw_crop, lm)
+
+        if ori_status["rejected"]:
+            face_results.append({
+                "face_index":      face_idx,
+                "bbox":            list(bbox),
+                "prediction":      "UNCERTAIN",
+                "ui_color":        "amber",
+                "ui_label":        "Cannot analyze",
+                "ui_muted":        False,
+                "reason":          ori_status["reason"],
+                "triggered_rule":  "orientation_rejected",
+                "confidence":      0.0,
+                "ensemble_score":  0.5,
+                "model_scores":    {"efb4": 0.0, "swin": 0.0, "clip": 0.0},
+                "metrics":         {"spread": 0.0, "std": 0.0, "margin": 0.0,
+                                    "votes_fake": 0, "votes_real": 0},
+                "model_agreement": "split",
+                "story": {
+                    "headline":        "Cannot analyze — face orientation",
+                    "summary":         ori_status["reason"],
+                    "evidence":        [],
+                    "model_take":      "Please upload an image where the face is upright.",
+                    "model_breakdown": [],
+                    "closing":         "",
+                    "is_fake":         False,
+                    "uncertain":       True,
+                    "confidence":      0.0,
+                    "agreement":       "split",
+                    "reason":          ori_status["reason"],
+                },
+                "images": {
+                    "face_crop": img_to_b64(cv2.resize(raw_crop, (224, 224))),
+                    "annotated": img_to_b64(cv2.resize(raw_crop, (224, 224))),
+                    "hotspot":   img_to_b64(cv2.resize(raw_crop, (224, 224))),
+                },
+            })
+            continue
+
         # Pass the face crop array directly — no temp file, no lossy compression.
         try:
             result = predictor.predict_with_explanation_from_array(face_crop, use_tta=False)
@@ -170,29 +211,3 @@ async def analyze(file: UploadFile = File(...)):
     }
 
 
-@app.post("/analyze/report")
-async def analyze_report(file: UploadFile = File(...)):
-    import tempfile
-
-    ext = Path(file.filename).suffix.lower()
-    if ext not in ALLOWED_EXTS:
-        raise HTTPException(status_code=400, detail=f"Unsupported file type: {ext}")
-
-    data = await file.read()
-    img  = _decode_upload(data)
-
-    with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
-        tmp_path = tmp.name
-        cv2.imwrite(tmp_path, cv2.cvtColor(img, cv2.COLOR_RGB2BGR))
-
-    try:
-        result = predictor.predict_with_explanation(tmp_path, use_tta=False)
-    finally:
-        Path(tmp_path).unlink(missing_ok=True)
-
-    png_bytes = build_combined_png(result)
-    return Response(
-        content=png_bytes,
-        media_type="image/png",
-        headers={"Content-Disposition": "attachment; filename=deepfake_report.png"},
-    )
