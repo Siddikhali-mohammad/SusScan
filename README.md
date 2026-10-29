@@ -1,6 +1,8 @@
-# Cross-Dataset Deepfake Detection
+# SusScan: Cross-Dataset Deepfake Detection
 
-**Rutgers MS Data Science Capstone** — Mohammad Siddikhali
+**Rutgers MS Data Science Capstone (2026)**, Siddikh Ali Mohammad · Honorable Mention, Rutgers Data Science Day 2026
+
+**[Try the live demo on Hugging Face](https://huggingface.co/spaces/Siddikh/SusScan)** · upload an image and get a verdict, confidence score and a Grad-CAM++ heatmap of why.
 
 Stacking ensemble of three pretrained vision models for face manipulation detection, trained and evaluated across 8 public datasets (428,743 images). Achieves **98.5% accuracy / AUC 0.9985** in-distribution, with leave-one-dataset-out (LOO) cross-validation across all 8 datasets.
 
@@ -110,8 +112,8 @@ deepfake-detection/
 ## Installation
 
 ```bash
-git clone https://github.com/your-username/deepfake-detection.git
-cd deepfake-detection
+git clone https://github.com/Siddikhali-mohammad/SusScan.git
+cd SusScan
 pip install -r requirements.txt
 ```
 
